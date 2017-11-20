@@ -1,38 +1,59 @@
-package fluentd;
+package logs;
 
 import com.facebook.presto.spi.eventlistener.EventListener;
 import com.facebook.presto.spi.eventlistener.QueryCompletedEvent;
 import com.facebook.presto.spi.eventlistener.QueryFailureInfo;
-import io.airlift.log.Logger;
-import org.komamitsu.fluency.Fluency;
+// import io.airlift.log.Logger;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
+import java.io.FileWriter;
+import java.util.HashMap;
+import java.io.UncheckedIOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 
-public class FluentdListener implements EventListener {
 
-    private static final Logger log = Logger.get(FluentdListener.class);
+public class LogsListener implements EventListener{
+   FileWriter writer;
 
-    private String fluentdTag;
+   public LogsListener(){
+      try {
+         writer = new FileWriter("/var/lib/presto/queries.log");
 
-    private Fluency fluency;
+      } catch (IOException e) {
+         e.printStackTrace();
+      }
+   }
 
-    public FluentdListener(Fluency fluency, String fluentdTag) {
-        this.fluency = fluency;
-        this.fluentdTag = fluentdTag;
-    }
+   public LogsListener(Map<String, String> config){
+      try {
+         writer = new FileWriter("/var/lib/presto/queries.log");
 
-    @Override
-    public void queryCompleted(QueryCompletedEvent queryCompletedEvent)
-    {
+      } catch (IOException e) {
+         e.printStackTrace();
+      }
+   }
+
+   @Override
+   public void queryCompleted(QueryCompletedEvent queryCompletedEvent) {
+
         Map<String, Object> event = new HashMap<>();
 
         // QueryMetadata
         event.put("queryId", queryCompletedEvent.getMetadata().getQueryId());
+        event.put("transactionId", queryCompletedEvent.getMetadata().getTransactionId());
+
         event.put("query", queryCompletedEvent.getMetadata().getQuery());
+        event.put("queryState", queryCompletedEvent.getMetadata().getQueryState());
+
         event.put("uri", queryCompletedEvent.getMetadata().getUri().toString());
-        event.put("state", queryCompletedEvent.getMetadata().getQueryState());
+
+        event.put("plan", queryCompletedEvent.getMetadata().getPlan());
+        event.put("payload", queryCompletedEvent.getMetadata().getPayload());
+
 
         // QueryStatistics
         event.put("cpuTime", queryCompletedEvent.getStatistics().getCpuTime().toMillis());
@@ -92,11 +113,86 @@ public class FluentdListener implements EventListener {
         event.put("endTime", queryCompletedEvent.getEndTime().toEpochMilli());
         event.put("executionStartTime", queryCompletedEvent.getExecutionStartTime().toEpochMilli());
 
-        try {
-            fluency.emit(fluentdTag, event);
-        } catch (IOException e) {
-            log.error(e.getMessage(), e);
-        }
 
-    }
+
+      try {
+         writer = new FileWriter("/var/lib/presto/queries.log", true);
+         // // writer.append(" Query : " + queryCompletedEvent.getMetadata().getQuery()+"\r\n ");
+
+         // Class<?> clazz = queryCompletedEvent.getMetadata().getClass();
+
+         // for(Field field : clazz.getDeclaredFields()) {
+         //     //you can also use .toGenericString() instead of .getName(). This will
+         //     //give you the type information as well.
+         //    writer.append(field.getName()+"\r\n ");
+         // }
+
+         // writer.close();
+
+         // for (Field field : queryCompletedEvent.class.getDeclaredFields()) {
+         //     //get the static type of the field
+         //     Class<?> fieldType = field.getType();
+         //     //if it's String,
+         //     if (fieldType == String.class) {
+         //         // save/use field
+         //     }
+         //     //if it's String[],
+         //     else if (fieldType == String[].class) {
+         //         // save/use field
+         //     }
+         //     //if it's List or a subtype of List,
+         //     else if (List.class.isAssignableFrom(fieldType)) {
+         //         //get the type as generic
+         //         ParameterizedType fieldGenericType =
+         //                 (ParameterizedType)field.getGenericType();
+         //         //get it's first type parameter
+         //         Class<?> fieldTypeParameterType =
+         //                 (Class<?>)fieldGenericType.getActualTypeArguments()[0];
+         //         //if the type parameter is String,
+         //         if (fieldTypeParameterType == String.class) {
+         //             // save/use field
+         //         }
+         //     }
+         // }
+         // writer.close();
+
+
+
+
+
+
+
+
+
+
+
+
+
+         try {
+            writer = new FileWriter("/var/lib/presto/queries.log", true);
+            event.forEach((key, value) -> {
+               try { 
+                     writer.append(key + "  " + value + System.lineSeparator()); 
+               }
+               catch (IOException ex) { throw new UncheckedIOException(ex); }
+            });
+            writer.append("\r\n ");
+            writer.close();
+         } catch(UncheckedIOException ex) { 
+            throw ex.getCause(); 
+         }
+
+
+      } catch (IOException e) {
+         e.printStackTrace();
+      }
+
+
+
+
+
+
+
+
+   }
 }
